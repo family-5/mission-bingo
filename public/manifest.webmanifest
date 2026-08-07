@@ -1,0 +1,15 @@
+{
+  "name": "ミッションビンゴ",
+  "short_name": "ミッションビンゴ",
+  "description": "家族や友人と楽しむ写真付きミッションビンゴ",
+  "start_url": "/mission-bingo/",
+  "scope": "/mission-bingo/",
+  "display": "standalone",
+  "background_color": "#fffdf8",
+  "theme_color": "#18a999",
+  "lang": "ja",
+  "icons": [
+    {"src":"/mission-bingo/icons/icon-192.png","sizes":"192x192","type":"image/png","purpose":"any maskable"},
+    {"src":"/mission-bingo/icons/icon-512.png","sizes":"512x512","type":"image/png","purpose":"any maskable"}
+  ]
+}

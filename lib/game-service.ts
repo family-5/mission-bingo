@@ -1,5 +1,5 @@
 import {
-  Bytes, collection, doc, getDoc, onSnapshot, runTransaction,
+  Bytes, collection, deleteDoc, doc, getDoc, onSnapshot, runTransaction,
   serverTimestamp, setDoc, updateDoc,
 } from "firebase/firestore";
 import { auth, db } from "./firebase-client";
@@ -35,14 +35,14 @@ export async function getGame(gameId: string) {
   return snap.exists() ? ({ id: snap.id, ...snap.data() } as Game) : null;
 }
 
-export function subscribeGame(gameId: string, callback: (game: Game | null) => void) {
+export function subscribeGame(gameId: string, callback: (game: Game | null) => void, onError?: (error: Error) => void) {
   return onSnapshot(doc(db, "games", gameId), snap =>
-    callback(snap.exists() ? ({ id: snap.id, ...snap.data() } as Game) : null));
+    callback(snap.exists() ? ({ id: snap.id, ...snap.data() } as Game) : null), onError);
 }
 
-export function subscribeSubmissions(gameId: string, callback: (rows: Submission[], fromCache: boolean) => void) {
+export function subscribeSubmissions(gameId: string, callback: (rows: Submission[], fromCache: boolean) => void, onError?: (error: Error) => void) {
   return onSnapshot(collection(db, "games", gameId, "submissions"), { includeMetadataChanges: true }, snap =>
-    callback(snap.docs.map(d => ({ id: d.id, ...d.data() } as Submission)), snap.metadata.fromCache));
+    callback(snap.docs.map(d => ({ id: d.id, ...d.data() } as Submission)), snap.metadata.fromCache), onError);
 }
 
 export async function submitMission(gameId: string, participantId: string, missionId: number, photo: Blob, caption: string) {
@@ -56,6 +56,19 @@ export async function submitMission(gameId: string, participantId: string, missi
     photoContentType: "image/jpeg", caption: caption.slice(0, 200),
     status: "pending", approvedBy: [], createdAt: serverTimestamp(), completedAt: null,
   });
+}
+
+export async function cancelSubmission(gameId: string, submissionId: string) {
+  const user = auth.currentUser;
+  if (!user) throw new Error("認証が完了していません");
+  const ref = doc(db, "games", gameId, "submissions", submissionId);
+  const snap = await getDoc(ref);
+  if (!snap.exists()) return;
+  const submission = snap.data();
+  if (submission.authorUid !== user.uid || submission.status !== "pending") {
+    throw new Error("承認待ちの自分の申請だけ取り消せます");
+  }
+  await deleteDoc(ref);
 }
 
 export function photoBytesToUrl(value: unknown) {

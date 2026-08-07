@@ -37,7 +37,9 @@ service cloud.firestore {
           && request.resource.data.approvedBy.hasAll(resource.data.approvedBy)
           && ((request.resource.data.approvedBy.size() >= game(gameId).approvalsRequired && request.resource.data.status == 'approved')
             || (request.resource.data.approvedBy.size() < game(gameId).approvalsRequired && request.resource.data.status == 'pending'));
-        allow delete: if false;
+        allow delete: if signedIn()
+          && resource.data.authorUid == request.auth.uid
+          && resource.data.status == 'pending';
         match /comments/{commentId} {
           allow read: if signedIn();
           allow create: if signedIn() && request.resource.data.authorUid == request.auth.uid
