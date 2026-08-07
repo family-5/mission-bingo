@@ -8,7 +8,8 @@ export type Participant = { id: string; name: string; color: string };
 export type Mission = { id: number; text: string };
 export type Game = {
   id: string; title: string; ownerUid: string; approvalsRequired: number;
-  participants: Participant[]; missions: Mission[];
+  participants: Participant[]; missions: Mission[]; startsAt?: string; endsAt?: string;
+  announcement?: string; bingoReward?: number; completeReward?: number;
 };
 export type Submission = {
   id: string; participantId: string; authorUid: string; missionId: number;
