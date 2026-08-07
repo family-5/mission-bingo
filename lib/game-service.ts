@@ -9,7 +9,7 @@ export type Mission = { id: number; text: string };
 export type Game = {
   id: string; title: string; ownerUid: string; approvalsRequired: number;
   participants: Participant[]; missions: Mission[]; startsAt?: string; endsAt?: string;
-  announcement?: string; bingoReward?: number; completeReward?: number;
+  announcement?: string;
 };
 export type Submission = {
   id: string; participantId: string; authorUid: string; missionId: number;
@@ -40,9 +40,9 @@ export function subscribeGame(gameId: string, callback: (game: Game | null) => v
     callback(snap.exists() ? ({ id: snap.id, ...snap.data() } as Game) : null));
 }
 
-export function subscribeSubmissions(gameId: string, callback: (rows: Submission[]) => void) {
-  return onSnapshot(collection(db, "games", gameId, "submissions"), snap =>
-    callback(snap.docs.map(d => ({ id: d.id, ...d.data() } as Submission))));
+export function subscribeSubmissions(gameId: string, callback: (rows: Submission[], fromCache: boolean) => void) {
+  return onSnapshot(collection(db, "games", gameId, "submissions"), { includeMetadataChanges: true }, snap =>
+    callback(snap.docs.map(d => ({ id: d.id, ...d.data() } as Submission)), snap.metadata.fromCache));
 }
 
 export async function submitMission(gameId: string, participantId: string, missionId: number, photo: Blob, caption: string) {
