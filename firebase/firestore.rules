@@ -25,12 +25,13 @@ service cloud.firestore {
           && request.resource.data.photoBytes is bytes
           && request.resource.data.photoBytes.size() <= 520000
           && request.resource.data.photoContentType == 'image/jpeg'
-          && request.resource.data.missionId >= 0 && request.resource.data.missionId < 25
-          && submissionId == request.resource.data.participantId + '_' + request.resource.data.missionId;
+          && request.resource.data.participantId is string
+          && request.resource.data.missionId is int
+          && request.resource.data.missionId >= 0 && request.resource.data.missionId < 25;
         allow update: if signedIn()
           && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['approvedBy','status','completedAt'])
           && request.auth.uid != resource.data.authorUid
-          && !request.auth.uid in resource.data.approvedBy
+          && !(request.auth.uid in resource.data.approvedBy)
           && request.resource.data.approvedBy.size() == resource.data.approvedBy.size() + 1
           && request.auth.uid in request.resource.data.approvedBy
           && request.resource.data.approvedBy.hasAll(resource.data.approvedBy)
