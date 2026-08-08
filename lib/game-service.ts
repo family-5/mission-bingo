@@ -9,7 +9,7 @@ export type Mission = { id: number; text: string };
 export type Game = {
   id: string; title: string; ownerUid: string; approvalsRequired: number;
   participants: Participant[]; missions: Mission[]; startsAt?: string; endsAt?: string;
-  announcement?: string;
+  announcement?: string; primaryEditorUid?: string;
 };
 export type Submission = {
   id: string; participantId: string; authorUid: string; missionId: number;
@@ -69,6 +69,20 @@ export async function cancelSubmission(gameId: string, submissionId: string) {
     throw new Error("承認待ちの自分の申請だけ取り消せます");
   }
   await deleteDoc(ref);
+}
+
+export async function claimPrimaryEditor(gameId: string) {
+  const user = auth.currentUser;
+  if (!user) throw new Error("認証が完了していません");
+  const ref = doc(db, "games", gameId);
+  return runTransaction(db, async tx => {
+    const snap = await tx.get(ref);
+    if (!snap.exists()) throw new Error("ゲームが見つかりません");
+    const current = snap.data().primaryEditorUid as string | undefined;
+    if (current) return current === user.uid;
+    tx.update(ref, { primaryEditorUid: user.uid });
+    return true;
+  });
 }
 
 export function photoBytesToUrl(value: unknown) {

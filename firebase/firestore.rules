@@ -4,6 +4,11 @@ service cloud.firestore {
     function signedIn() { return request.auth != null; }
     function game(gameId) { return get(/databases/$(database)/documents/games/$(gameId)).data; }
     function isOwner(gameId) { return signedIn() && game(gameId).ownerUid == request.auth.uid; }
+    function isPrimaryEditor(gameId) {
+      return signedIn() && 'primaryEditorUid' in game(gameId)
+        && game(gameId).primaryEditorUid == request.auth.uid;
+    }
+    function isManager(gameId) { return isOwner(gameId) || isPrimaryEditor(gameId); }
     function validGame(g) {
       return g.title is string && g.title.size() > 0 && g.title.size() <= 80
         && g.participants is list && g.participants.size() >= 2 && g.participants.size() <= 8
@@ -14,7 +19,17 @@ service cloud.firestore {
     match /games/{gameId} {
       allow read: if signedIn();
       allow create: if signedIn() && request.resource.data.ownerUid == request.auth.uid && validGame(request.resource.data);
-      allow update: if isOwner(gameId) && request.resource.data.ownerUid == resource.data.ownerUid && validGame(request.resource.data);
+      allow update: if (
+          isManager(gameId)
+          && request.resource.data.ownerUid == resource.data.ownerUid
+          && validGame(request.resource.data)
+        ) || (
+          signedIn()
+          && !('primaryEditorUid' in resource.data)
+          && request.resource.data.primaryEditorUid == request.auth.uid
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['primaryEditorUid'])
+          && validGame(request.resource.data)
+        );
       allow delete: if false;
       match /submissions/{submissionId} {
         allow read: if signedIn();
@@ -28,15 +43,32 @@ service cloud.firestore {
           && request.resource.data.participantId is string
           && request.resource.data.missionId is int
           && request.resource.data.missionId >= 0 && request.resource.data.missionId < 25;
-        allow update: if signedIn()
-          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['approvedBy','status','completedAt'])
-          && request.auth.uid != resource.data.authorUid
-          && !(request.auth.uid in resource.data.approvedBy)
-          && request.resource.data.approvedBy.size() == resource.data.approvedBy.size() + 1
-          && request.auth.uid in request.resource.data.approvedBy
-          && request.resource.data.approvedBy.hasAll(resource.data.approvedBy)
-          && ((request.resource.data.approvedBy.size() >= game(gameId).approvalsRequired && request.resource.data.status == 'approved')
-            || (request.resource.data.approvedBy.size() < game(gameId).approvalsRequired && request.resource.data.status == 'pending'));
+        allow update: if (
+            signedIn()
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['approvedBy','status','completedAt'])
+            && request.auth.uid != resource.data.authorUid
+            && !(request.auth.uid in resource.data.approvedBy)
+            && request.resource.data.approvedBy.size() == resource.data.approvedBy.size() + 1
+            && request.auth.uid in request.resource.data.approvedBy
+            && request.resource.data.approvedBy.hasAll(resource.data.approvedBy)
+            && ((request.resource.data.approvedBy.size() >= game(gameId).approvalsRequired && request.resource.data.status == 'approved')
+              || (request.resource.data.approvedBy.size() < game(gameId).approvalsRequired && request.resource.data.status == 'pending'))
+          ) || (
+            signedIn()
+            && resource.data.authorUid == request.auth.uid
+            && resource.data.status == 'pending'
+            && request.resource.data.authorUid == resource.data.authorUid
+            && request.resource.data.participantId == resource.data.participantId
+            && request.resource.data.missionId == resource.data.missionId
+            && request.resource.data.status == 'pending'
+            && request.resource.data.approvedBy.size() == 0
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+              'photoBytes','photoContentType','caption','approvedBy','status','createdAt','completedAt'
+            ])
+            && request.resource.data.photoBytes is bytes
+            && request.resource.data.photoBytes.size() <= 520000
+            && request.resource.data.photoContentType == 'image/jpeg'
+          );
         allow delete: if signedIn()
           && resource.data.authorUid == request.auth.uid
           && resource.data.status == 'pending';
