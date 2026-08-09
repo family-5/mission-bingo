@@ -4,6 +4,11 @@ service cloud.firestore {
     function signedIn() { return request.auth != null; }
     function game(gameId) { return get(/databases/$(database)/documents/games/$(gameId)).data; }
     function isOwner(gameId) { return signedIn() && game(gameId).ownerUid == request.auth.uid; }
+    function isExistingEditor(gameId) {
+      return signedIn() && 'primaryEditorUid' in game(gameId)
+        && game(gameId).primaryEditorUid == request.auth.uid;
+    }
+    function isManager(gameId) { return isOwner(gameId) || isExistingEditor(gameId); }
     function validGame(g) {
       return g.title is string && g.title.size() > 0 && g.title.size() <= 80
         && g.participants is list && g.participants.size() >= 2 && g.participants.size() <= 8
@@ -15,7 +20,7 @@ service cloud.firestore {
       allow read: if signedIn();
       allow create: if signedIn() && request.resource.data.ownerUid == request.auth.uid && validGame(request.resource.data);
       allow update: if (
-          isOwner(gameId)
+          isManager(gameId)
           && request.resource.data.ownerUid == resource.data.ownerUid
           && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['ownerUid','primaryEditorUid'])
           && validGame(request.resource.data)
