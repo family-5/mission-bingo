@@ -1,5 +1,5 @@
 import {
-  Bytes, collection, deleteDoc, doc, getDoc, onSnapshot, runTransaction,
+  Bytes, collection, deleteDoc, doc, getDoc, getDocs, onSnapshot, runTransaction,
   serverTimestamp, setDoc, updateDoc,
 } from "firebase/firestore";
 import { auth, db } from "./firebase-client";
@@ -71,20 +71,6 @@ export async function cancelSubmission(gameId: string, submissionId: string) {
   await deleteDoc(ref);
 }
 
-export async function claimPrimaryEditor(gameId: string) {
-  const user = auth.currentUser;
-  if (!user) throw new Error("認証が完了していません");
-  const ref = doc(db, "games", gameId);
-  return runTransaction(db, async tx => {
-    const snap = await tx.get(ref);
-    if (!snap.exists()) throw new Error("ゲームが見つかりません");
-    const current = snap.data().primaryEditorUid as string | undefined;
-    if (current) return current === user.uid;
-    tx.update(ref, { primaryEditorUid: user.uid });
-    return true;
-  });
-}
-
 export function photoBytesToUrl(value: unknown) {
   if (!(value instanceof Bytes)) return "";
   const bytes = value.toUint8Array();
@@ -122,6 +108,16 @@ export async function addPhotoComment(gameId: string, submissionId: string, part
 export function subscribeComments(gameId: string, submissionId: string, callback: (rows: PhotoComment[]) => void) {
   return onSnapshot(collection(db, "games", gameId, "submissions", submissionId, "comments"), snap =>
     callback(snap.docs.map(d => ({ id: d.id, ...d.data() } as PhotoComment))));
+}
+
+export async function loadAlbumComments(gameId: string, submissionIds: string[]) {
+  const entries = await Promise.all(submissionIds.map(async submissionId => {
+    const snap = await getDocs(collection(db, "games", gameId, "submissions", submissionId, "comments"));
+    const comments = snap.docs.map(d => ({ id: d.id, ...d.data() } as PhotoComment))
+      .sort((a, b) => (a.createdAt?.seconds ?? 0) - (b.createdAt?.seconds ?? 0));
+    return [submissionId, comments] as const;
+  }));
+  return Object.fromEntries(entries) as Record<string, PhotoComment[]>;
 }
 
 export async function updateGame(gameId: string, patch: Record<string, unknown>) {
