@@ -69,8 +69,12 @@ function MissionSettings({game,posts}:{game:Game;posts:Submission[]}){
   const [values,setValues]=useState(()=>game.missions.map(m=>m.text));
   const [message,setMessage]=useState("");
   const [saving,setSaving]=useState(false);
+  const [approvalCount,setApprovalCount]=useState(game.approvalsRequired);
+  const [approvalMessage,setApprovalMessage]=useState("");
+  const [savingApprovals,setSavingApprovals]=useState(false);
   const usedIds=new Set(posts.map(post=>post.missionId));
   useEffect(()=>setValues(game.missions.map(m=>m.text)),[game.missions]);
+  useEffect(()=>setApprovalCount(game.approvalsRequired),[game.approvalsRequired]);
   async function save(){
     const missions=values.map((text,id)=>({id,text:text.trim()}));
     if(missions.some(m=>!m.text)){setMessage("空欄のミッションがあります");return}
@@ -79,7 +83,17 @@ function MissionSettings({game,posts}:{game:Game;posts:Submission[]}){
     catch(e){setMessage(e instanceof Error?e.message:"保存できませんでした")}
     finally{setSaving(false)}
   }
-  return <article className="mission-settings admin-card"><span className="owner-badge">一番上の参加者のみ</span><b>ミッションを編集</b><p>申請履歴があるミッションは、進行データを守るため編集できません。</p><div className="mission-settings-list">{game.missions.map((mission,index)=>{const used=usedIds.has(mission.id);return <label key={mission.id}><span>{mission.id+1}</span><input value={values[index]??""} disabled={used} onChange={e=>setValues(current=>current.map((value,i)=>i===index?e.target.value:value))}/>{used&&<small>使用済み</small>}</label>})}</div><button onClick={save} disabled={saving}>{saving?"保存中…":"変更を保存"}</button>{message&&<small>{message}</small>}</article>;
+  async function saveApprovalCount(){
+    if(approvalCount===game.approvalsRequired){setApprovalMessage("現在と同じ承認人数です");return}
+    const alreadyEnough=posts.filter(post=>post.status==="pending"&&post.approvedBy.length>=approvalCount);
+    if(alreadyEnough.length){setApprovalMessage(`承認待ち${alreadyEnough.length}件が新しい人数に到達済みのため、先に処理してから変更してください`);return}
+    if(!confirm(`必要な承認人数を ${game.approvalsRequired}人 から ${approvalCount}人へ変更しますか？\n\n正式承認済みの投稿はそのままです。承認待ちの投稿と今後の申請に新しい人数が適用されます。`))return;
+    setSavingApprovals(true);setApprovalMessage("");
+    try{await updateGame(game.id,{approvalsRequired:approvalCount});setApprovalMessage(`必要な承認人数を${approvalCount}人に変更しました`)}
+    catch(e){setApprovalMessage(e instanceof Error?e.message:"承認人数を変更できませんでした")}
+    finally{setSavingApprovals(false)}
+  }
+  return <><article className="approval-settings admin-card"><span className="owner-badge">管理者のみ</span><b>必要な承認人数</b><p>正式承認済みの投稿は変更されません。承認待ちの投稿と、この先の申請に新しい人数が適用されます。</p><label>承認人数<select value={approvalCount} onChange={e=>setApprovalCount(Number(e.target.value))}>{Array.from({length:Math.max(1,game.participants.length-1)},(_,i)=><option key={i+1} value={i+1}>{i+1}人</option>)}</select></label><button onClick={saveApprovalCount} disabled={savingApprovals||approvalCount===game.approvalsRequired}>{savingApprovals?"保存中…":`${approvalCount}人承認に変更`}</button>{approvalMessage&&<small>{approvalMessage}</small>}</article><article className="mission-settings admin-card"><span className="owner-badge">一番上の参加者のみ</span><b>ミッションを編集</b><p>申請履歴があるミッションは、進行データを守るため編集できません。</p><div className="mission-settings-list">{game.missions.map((mission,index)=>{const used=usedIds.has(mission.id);return <label key={mission.id}><span>{mission.id+1}</span><input value={values[index]??""} disabled={used} onChange={e=>setValues(current=>current.map((value,i)=>i===index?e.target.value:value))}/>{used&&<small>使用済み</small>}</label>})}</div><button onClick={save} disabled={saving}>{saving?"保存中…":"変更を保存"}</button>{message&&<small>{message}</small>}</article></>;
 }
 
 function GameApp({gameId,onSwitchGame,onCreateGame}:{gameId:string;onSwitchGame:(id:string)=>void;onCreateGame:()=>void}){
